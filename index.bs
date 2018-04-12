@@ -1302,8 +1302,24 @@ When this method is invoked, the user agent MUST execute the following algorithm
                 Note: [=Authenticators=] may return an indication of "the user cancelled the entire operation".
                 How a user agent manifests this state to users is unspecified.
 
-        :   If any |authenticator| returns an error status,
+
+        :   If any |authenticator| returns an error status equivalent to "{{InvalidStateError}}",
+        ::  1. [=set/Remove=] |authenticator| from |issuedRequests|.
+            1. [=set/For each=] remaining |authenticator| in |issuedRequests| invoke the [=authenticatorCancel=] operation on
+                |authenticator| and [=set/remove=] it from |issuedRequests|.
+            1. Return a {{DOMException}} whose name is "{{InvalidStateError}}" and terminate this algorithm.
+
+            Note: This error status is handled separately because the |authenticator| returns it only if
+            |allowCredentialDescriptorList| does not identify any credentials bound to the |authenticator| but the user has [=user
+            consent|consented=] to the operation. Given this explicit consent, it is acceptable for this case to be
+            distinguishable to the [=[RP]=].
+
+        :   If any |authenticator| returns an error status not equivalent to "{{InvalidStateError}}",
         ::  [=set/Remove=] |authenticator| from |issuedRequests|.
+
+            Note: This case does not imply [=user consent=] for the operation, so details about the error must be hidden from the
+            [=[RP]=] in order to prevent leak of potentially identifying information. See [[#sec-make-credential-privacy]] for
+            details.
 
         :   If any |authenticator| indicates success,
         ::  1.  [=set/Remove=] |authenticator| from |issuedRequests|.
@@ -2464,7 +2480,15 @@ When this method is invoked, the [=authenticator=] MUST perform the following pr
     authenticator's [=credentials map=], [=set/append=] |credSource| to |credentialOptions|.
 1. [=list/Remove=] any items from |credentialOptions| whose [=public key credential source/rpId=] is not equal to
     |rpId|.
-1. If |credentialOptions| is now empty, return an error code equivalent to "{{NotAllowedError}}" and terminate the operation.
+1. If |credentialOptions| is now empty, attempt to obtain [=user consent=] via a method that includes a [=test
+    of user presence=]. If the user
+    <dl class="switch">
+        :   confirms consent
+        ::  return an error code equivalent to "{{InvalidStateError}}" and terminate the operation.
+
+        :   does not consent
+        ::  return an error code equivalent to "{{NotAllowedError}}" and terminate the operation.
+    </dl>
 
 1. Prompt the user to select a [=public key credential source=] |selectedCredential| from |credentialOptions|.
     Obtain [=user consent=] for using |selectedCredential|. The prompt for obtaining this [=user consent|consent=] may be shown
